@@ -55,6 +55,47 @@ impl RuleEngine {
             });
         }
 
+        for entry in run
+            .filesystem_diff
+            .created
+            .iter()
+            .chain(run.filesystem_diff.deleted.iter())
+        {
+            if is_sensitive_path(&entry.path) {
+                findings.push(Finding {
+                    severity: Severity::High,
+                    title: "Sensitive file path touched".to_string(),
+                    detail: format!("Filesystem diff includes `{}`.", entry.path),
+                });
+            }
+
+            if is_shell_profile(&entry.path) {
+                findings.push(Finding {
+                    severity: Severity::Medium,
+                    title: "Shell profile changed".to_string(),
+                    detail: format!("Filesystem diff includes `{}`.", entry.path),
+                });
+            }
+        }
+
+        for entry in &run.filesystem_diff.modified {
+            if is_sensitive_path(&entry.path) {
+                findings.push(Finding {
+                    severity: Severity::High,
+                    title: "Sensitive file path modified".to_string(),
+                    detail: format!("Filesystem diff includes `{}`.", entry.path),
+                });
+            }
+
+            if is_shell_profile(&entry.path) {
+                findings.push(Finding {
+                    severity: Severity::Medium,
+                    title: "Shell profile modified".to_string(),
+                    detail: format!("Filesystem diff includes `{}`.", entry.path),
+                });
+            }
+        }
+
         findings
     }
 }
@@ -64,4 +105,27 @@ fn contains_any(haystack: &str, needles: &[&str]) -> bool {
     needles
         .iter()
         .any(|needle| haystack.contains(&needle.to_ascii_lowercase()))
+}
+
+fn is_sensitive_path(path: &str) -> bool {
+    contains_any(
+        path,
+        &[
+            "/.ssh/",
+            "id_rsa",
+            "id_ed25519",
+            ".npmrc",
+            ".pypirc",
+            ".netrc",
+            "token",
+            "secret",
+        ],
+    )
+}
+
+fn is_shell_profile(path: &str) -> bool {
+    path.ends_with("/.bashrc")
+        || path.ends_with("/.zshrc")
+        || path.ends_with("/.profile")
+        || path.ends_with("/.bash_profile")
 }
