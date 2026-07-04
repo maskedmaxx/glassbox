@@ -1,6 +1,7 @@
 mod audit;
 mod cli;
 mod docker;
+mod fsdiff;
 mod report;
 mod rules;
 
