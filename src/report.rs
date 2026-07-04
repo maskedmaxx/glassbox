@@ -1,4 +1,5 @@
 use crate::docker::SandboxRun;
+use crate::fsdiff::FilesystemDiff;
 use crate::rules::{Finding, Severity};
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -13,6 +14,7 @@ pub struct AuditReport {
     pub duration_ms: u128,
     pub stdout_preview: String,
     pub stderr_preview: String,
+    pub filesystem_diff: FilesystemDiff,
     pub findings: Vec<Finding>,
 }
 
@@ -40,6 +42,7 @@ impl AuditReport {
             duration_ms: run.duration.as_millis(),
             stdout_preview: preview(&run.stdout),
             stderr_preview: preview(&run.stderr),
+            filesystem_diff: run.filesystem_diff,
             findings,
         }
     }
@@ -70,6 +73,10 @@ impl AuditReport {
         body.push_str(&format!("**Exit code:** `{:?}`\n\n", self.exit_code));
         body.push_str(&format!("**Duration:** `{} ms`\n\n", self.duration_ms));
         body.push_str(&format!("**Risk:** `{}`\n\n", self.risk_label()));
+        body.push_str(&format!(
+            "**Filesystem changes:** `{}`\n\n",
+            self.filesystem_diff.changed_file_count()
+        ));
 
         body.push_str("## Findings\n\n");
         if self.findings.is_empty() {
@@ -84,6 +91,11 @@ impl AuditReport {
             body.push('\n');
         }
 
+        body.push_str("## Filesystem Changes\n\n");
+        write_file_list(&mut body, "Created", &self.filesystem_diff.created);
+        write_modified_file_list(&mut body, "Modified", &self.filesystem_diff.modified);
+        write_file_list(&mut body, "Deleted", &self.filesystem_diff.deleted);
+
         body.push_str("## Output Preview\n\n");
         body.push_str("### stdout\n\n```text\n");
         body.push_str(&self.stdout_preview);
@@ -94,6 +106,55 @@ impl AuditReport {
 
         body
     }
+}
+
+fn write_file_list(body: &mut String, title: &str, files: &[crate::fsdiff::FileEntry]) {
+    const MAX_FILES: usize = 40;
+
+    body.push_str(&format!("### {}\n\n", title));
+
+    if files.is_empty() {
+        body.push_str("None detected.\n\n");
+        return;
+    }
+
+    for file in files.iter().take(MAX_FILES) {
+        body.push_str(&format!("- `{}` ({} bytes, {})\n", file.path, file.size, file.kind));
+    }
+
+    if files.len() > MAX_FILES {
+        body.push_str(&format!("- ...{} more\n", files.len() - MAX_FILES));
+    }
+
+    body.push('\n');
+}
+
+fn write_modified_file_list(
+    body: &mut String,
+    title: &str,
+    files: &[crate::fsdiff::ModifiedFile],
+) {
+    const MAX_FILES: usize = 40;
+
+    body.push_str(&format!("### {}\n\n", title));
+
+    if files.is_empty() {
+        body.push_str("None detected.\n\n");
+        return;
+    }
+
+    for file in files.iter().take(MAX_FILES) {
+        body.push_str(&format!(
+            "- `{}` ({} -> {} bytes, mode {} -> {})\n",
+            file.path, file.before_size, file.after_size, file.before_mode, file.after_mode
+        ));
+    }
+
+    if files.len() > MAX_FILES {
+        body.push_str(&format!("- ...{} more\n", files.len() - MAX_FILES));
+    }
+
+    body.push('\n');
 }
 
 impl ReportWriter {
