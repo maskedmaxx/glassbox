@@ -1,4 +1,5 @@
 use crate::docker::SandboxRun;
+use crate::signals::BehaviorSignals;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -19,7 +20,7 @@ pub struct Finding {
 pub struct RuleEngine;
 
 impl RuleEngine {
-    pub fn evaluate(&self, run: &SandboxRun) -> Vec<Finding> {
+    pub fn evaluate(&self, run: &SandboxRun, signals: &BehaviorSignals) -> Vec<Finding> {
         let combined = format!("{}\n{}", run.stdout, run.stderr);
         let mut findings = Vec::new();
 
@@ -52,6 +53,49 @@ impl RuleEngine {
                 severity: Severity::Low,
                 title: "Download signal".to_string(),
                 detail: "Command output referenced a download tool or download action.".to_string(),
+            });
+        }
+
+        if signals.has_command("sudo") {
+            findings.push(Finding {
+                severity: Severity::High,
+                title: "Privilege escalation command".to_string(),
+                detail: "The command or output referenced sudo.".to_string(),
+            });
+        }
+
+        if signals.has_command("rm") {
+            findings.push(Finding {
+                severity: Severity::Medium,
+                title: "Deletion command".to_string(),
+                detail: "The command or output referenced rm.".to_string(),
+            });
+        }
+
+        if !signals.domains.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Low,
+                title: "Network destination signal".to_string(),
+                detail: format!(
+                    "Detected URL domains: {}.",
+                    signals.domains.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+                ),
+            });
+        }
+
+        for path in &signals.sensitive_paths {
+            findings.push(Finding {
+                severity: Severity::High,
+                title: "Sensitive path signal".to_string(),
+                detail: format!("Detected sensitive path marker `{path}`."),
+            });
+        }
+
+        for path in &signals.shell_profiles {
+            findings.push(Finding {
+                severity: Severity::Medium,
+                title: "Shell profile signal".to_string(),
+                detail: format!("Detected shell profile marker `{path}`."),
             });
         }
 

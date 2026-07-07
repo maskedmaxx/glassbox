@@ -1,6 +1,7 @@
 use crate::docker::SandboxRun;
 use crate::fsdiff::FilesystemDiff;
 use crate::rules::{Finding, Severity};
+use crate::signals::BehaviorSignals;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fs;
@@ -14,6 +15,7 @@ pub struct AuditReport {
     pub duration_ms: u128,
     pub stdout_preview: String,
     pub stderr_preview: String,
+    pub signals: BehaviorSignals,
     pub filesystem_diff: FilesystemDiff,
     pub findings: Vec<Finding>,
 }
@@ -33,6 +35,7 @@ impl AuditReport {
         command: String,
         image: String,
         run: SandboxRun,
+        signals: BehaviorSignals,
         findings: Vec<Finding>,
     ) -> Self {
         Self {
@@ -42,6 +45,7 @@ impl AuditReport {
             duration_ms: run.duration.as_millis(),
             stdout_preview: preview(&run.stdout),
             stderr_preview: preview(&run.stderr),
+            signals,
             filesystem_diff: run.filesystem_diff,
             findings,
         }
@@ -77,6 +81,10 @@ impl AuditReport {
             "**Filesystem changes:** `{}`\n\n",
             self.filesystem_diff.changed_file_count()
         ));
+        body.push_str(&format!(
+            "**Domains observed:** `{}`\n\n",
+            self.signals.domains.len()
+        ));
 
         body.push_str("## Findings\n\n");
         if self.findings.is_empty() {
@@ -90,6 +98,13 @@ impl AuditReport {
             }
             body.push('\n');
         }
+
+        body.push_str("## Behavior Signals\n\n");
+        write_string_list(&mut body, "URLs", &self.signals.urls);
+        write_string_list(&mut body, "Domains", &self.signals.domains);
+        write_string_list(&mut body, "Command Tokens", &self.signals.command_tokens);
+        write_string_list(&mut body, "Sensitive Paths", &self.signals.sensitive_paths);
+        write_string_list(&mut body, "Shell Profiles", &self.signals.shell_profiles);
 
         body.push_str("## Filesystem Changes\n\n");
         write_file_list(&mut body, "Created", &self.filesystem_diff.created);
@@ -106,6 +121,27 @@ impl AuditReport {
 
         body
     }
+}
+
+fn write_string_list(body: &mut String, title: &str, values: &[String]) {
+    const MAX_VALUES: usize = 40;
+
+    body.push_str(&format!("### {}\n\n", title));
+
+    if values.is_empty() {
+        body.push_str("None detected.\n\n");
+        return;
+    }
+
+    for value in values.iter().take(MAX_VALUES) {
+        body.push_str(&format!("- `{}`\n", value));
+    }
+
+    if values.len() > MAX_VALUES {
+        body.push_str(&format!("- ...{} more\n", values.len() - MAX_VALUES));
+    }
+
+    body.push('\n');
 }
 
 fn write_file_list(body: &mut String, title: &str, files: &[crate::fsdiff::FileEntry]) {
