@@ -4,6 +4,7 @@ mod docker;
 mod fsdiff;
 mod report;
 mod rules;
+mod signals;
 
 use anyhow::Result;
 use cli::{Cli, Command};
