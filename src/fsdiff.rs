@@ -33,8 +33,8 @@ impl FilesystemDiff {
     pub fn from_manifest_files(before: &Path, after: &Path) -> Result<Self> {
         let before_entries = parse_manifest(before)
             .with_context(|| format!("failed to parse {}", before.display()))?;
-        let after_entries =
-            parse_manifest(after).with_context(|| format!("failed to parse {}", after.display()))?;
+        let after_entries = parse_manifest(after)
+            .with_context(|| format!("failed to parse {}", after.display()))?;
 
         Ok(Self::between(before_entries, after_entries))
     }
@@ -97,7 +97,9 @@ fn parse_manifest(path: &Path) -> Result<Vec<FileEntry>> {
         let mut parts = line.splitn(5, '\t');
         let Some(path) = parts.next() else { continue };
         let Some(size) = parts.next() else { continue };
-        let Some(modified_at) = parts.next() else { continue };
+        let Some(modified_at) = parts.next() else {
+            continue;
+        };
         let Some(mode) = parts.next() else { continue };
         let Some(kind) = parts.next() else { continue };
 
