@@ -22,7 +22,7 @@ pub struct AuditArgs {
     pub command: String,
 
     /// Docker image used for the audit environment.
-    #[arg(long, default_value = "debian:bookworm-slim")]
+    #[arg(long, default_value = "glassbox-audit:latest")]
     pub image: String,
 
     /// Directory where reports should be written.

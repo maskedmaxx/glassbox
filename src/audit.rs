@@ -35,7 +35,7 @@ pub fn run(args: AuditArgs) -> Result<()> {
         .context("sandbox execution failed")?;
 
     let signals = BehaviorSignals::from_run(&args.command, &sandbox_run);
-    let findings = RuleEngine::default().evaluate(&sandbox_run, &signals);
+    let findings = RuleEngine.evaluate(&sandbox_run, &signals);
     let report = AuditReport::from_run(args.command, args.image, sandbox_run, signals, findings);
     let written = ReportWriter::new(args.out).write_all(&report)?;
 
