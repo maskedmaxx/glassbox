@@ -1,5 +1,7 @@
 use crate::docker::SandboxRun;
 use crate::fsdiff::FilesystemDiff;
+use crate::network::NetworkSummary;
+use crate::process::ProcessSummary;
 use crate::rules::{Finding, Severity};
 use crate::signals::BehaviorSignals;
 use anyhow::{Context, Result};
@@ -17,6 +19,8 @@ pub struct AuditReport {
     pub stderr_preview: String,
     pub signals: BehaviorSignals,
     pub filesystem_diff: FilesystemDiff,
+    pub process_summary: ProcessSummary,
+    pub network_summary: NetworkSummary,
     pub findings: Vec<Finding>,
 }
 
@@ -47,6 +51,8 @@ impl AuditReport {
             stderr_preview: preview(&run.stderr),
             signals,
             filesystem_diff: run.filesystem_diff,
+            process_summary: run.process_summary,
+            network_summary: run.network_summary,
             findings,
         }
     }
@@ -85,6 +91,14 @@ impl AuditReport {
             "**Domains observed:** `{}`\n\n",
             self.signals.domains.len()
         ));
+        body.push_str(&format!(
+            "**Processes observed:** `{}`\n\n",
+            self.process_summary.count()
+        ));
+        body.push_str(&format!(
+            "**Network connections observed:** `{}`\n\n",
+            self.network_summary.count()
+        ));
 
         body.push_str("## Findings\n\n");
         if self.findings.is_empty() {
@@ -106,6 +120,22 @@ impl AuditReport {
         write_string_list(&mut body, "Sensitive Paths", &self.signals.sensitive_paths);
         write_string_list(&mut body, "Shell Profiles", &self.signals.shell_profiles);
 
+        body.push_str("## Process Activity\n\n");
+        write_string_list(
+            &mut body,
+            "Observed Commands",
+            &self.process_summary.commands(),
+        );
+        write_process_list(&mut body, &self.process_summary);
+
+        body.push_str("## Network Activity\n\n");
+        write_string_list(
+            &mut body,
+            "Peer Addresses",
+            &self.network_summary.peer_addresses(),
+        );
+        write_network_list(&mut body, &self.network_summary);
+
         body.push_str("## Filesystem Changes\n\n");
         write_file_list(&mut body, "Created", &self.filesystem_diff.created);
         write_modified_file_list(&mut body, "Modified", &self.filesystem_diff.modified);
@@ -121,6 +151,65 @@ impl AuditReport {
 
         body
     }
+}
+
+fn write_process_list(body: &mut String, summary: &ProcessSummary) {
+    const MAX_PROCESSES: usize = 40;
+
+    body.push_str("### Process Samples\n\n");
+
+    if summary.observed.is_empty() {
+        body.push_str("None detected.\n\n");
+        return;
+    }
+
+    for event in summary.observed.iter().take(MAX_PROCESSES) {
+        body.push_str(&format!(
+            "- `{}` pid={} ppid={} args=`{}`\n",
+            event.command, event.pid, event.ppid, event.args
+        ));
+    }
+
+    if summary.observed.len() > MAX_PROCESSES {
+        body.push_str(&format!(
+            "- ...{} more\n",
+            summary.observed.len() - MAX_PROCESSES
+        ));
+    }
+
+    body.push('\n');
+}
+
+fn write_network_list(body: &mut String, summary: &NetworkSummary) {
+    const MAX_CONNECTIONS: usize = 40;
+
+    body.push_str("### Socket Samples\n\n");
+
+    if summary.connections.is_empty() {
+        body.push_str("None detected.\n\n");
+        return;
+    }
+
+    for connection in summary.connections.iter().take(MAX_CONNECTIONS) {
+        let process = connection.process.as_deref().unwrap_or("unknown process");
+        body.push_str(&format!(
+            "- `{}` `{}` {} -> {} ({})\n",
+            connection.transport,
+            connection.state,
+            connection.local_address,
+            connection.peer_address,
+            process
+        ));
+    }
+
+    if summary.connections.len() > MAX_CONNECTIONS {
+        body.push_str(&format!(
+            "- ...{} more\n",
+            summary.connections.len() - MAX_CONNECTIONS
+        ));
+    }
+
+    body.push('\n');
 }
 
 fn write_string_list(body: &mut String, title: &str, values: &[String]) {
@@ -155,7 +244,10 @@ fn write_file_list(body: &mut String, title: &str, files: &[crate::fsdiff::FileE
     }
 
     for file in files.iter().take(MAX_FILES) {
-        body.push_str(&format!("- `{}` ({} bytes, {})\n", file.path, file.size, file.kind));
+        body.push_str(&format!(
+            "- `{}` ({} bytes, {})\n",
+            file.path, file.size, file.kind
+        ));
     }
 
     if files.len() > MAX_FILES {
@@ -165,11 +257,7 @@ fn write_file_list(body: &mut String, title: &str, files: &[crate::fsdiff::FileE
     body.push('\n');
 }
 
-fn write_modified_file_list(
-    body: &mut String,
-    title: &str,
-    files: &[crate::fsdiff::ModifiedFile],
-) {
+fn write_modified_file_list(body: &mut String, title: &str, files: &[crate::fsdiff::ModifiedFile]) {
     const MAX_FILES: usize = 40;
 
     body.push_str(&format!("### {}\n\n", title));
