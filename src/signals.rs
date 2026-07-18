@@ -37,7 +37,11 @@ impl BehaviorSignals {
 
 fn extract_urls(text: &str) -> Vec<String> {
     let url_regex = Regex::new(r#"https?://[^\s'"<>)\]]+"#).expect("valid URL regex");
-    unique(url_regex.find_iter(text).map(|match_| clean_url(match_.as_str())))
+    unique(
+        url_regex
+            .find_iter(text)
+            .map(|match_| clean_url(match_.as_str())),
+    )
 }
 
 fn extract_domains(urls: &[String]) -> Vec<String> {
@@ -161,19 +165,24 @@ fn collect_markers_from_files(run: &SandboxRun, markers: &[&str], values: &mut B
 }
 
 fn contains_word(text: &str, word: &str) -> bool {
-    let word_regex =
-        Regex::new(&format!(r"(^|[^a-z0-9_-]){}([^a-z0-9_-]|$)", regex::escape(word)))
-            .expect("valid word regex");
+    let word_regex = Regex::new(&format!(
+        r"(^|[^a-z0-9_-]){}([^a-z0-9_-]|$)",
+        regex::escape(word)
+    ))
+    .expect("valid word regex");
     word_regex.is_match(text)
 }
 
 fn clean_url(url: &str) -> String {
-    url.trim_end_matches(|char| matches!(char, '.' | ',' | ';' | ':'))
-        .to_string()
+    url.trim_end_matches(['.', ',', ';', ':']).to_string()
 }
 
 fn unique(values: impl IntoIterator<Item = String>) -> Vec<String> {
-    values.into_iter().collect::<BTreeSet<_>>().into_iter().collect()
+    values
+        .into_iter()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 #[cfg(test)]
@@ -181,6 +190,8 @@ mod tests {
     use super::BehaviorSignals;
     use crate::docker::SandboxRun;
     use crate::fsdiff::{FileEntry, FilesystemDiff, ModifiedFile};
+    use crate::network::NetworkSummary;
+    use crate::process::ProcessSummary;
     use std::time::Duration;
 
     #[test]
@@ -190,6 +201,8 @@ mod tests {
             stdout: "downloaded https://example.com/install.sh with curl".to_string(),
             stderr: String::new(),
             duration: Duration::from_millis(10),
+            process_summary: ProcessSummary::default(),
+            network_summary: NetworkSummary::default(),
             filesystem_diff: FilesystemDiff {
                 created: vec![entry("/root/.ssh/config")],
                 modified: vec![ModifiedFile {
@@ -205,11 +218,17 @@ mod tests {
 
         let signals = BehaviorSignals::from_run("bash install.sh", &run);
 
-        assert_eq!(signals.urls, vec!["https://example.com/install.sh".to_string()]);
+        assert_eq!(
+            signals.urls,
+            vec!["https://example.com/install.sh".to_string()]
+        );
         assert_eq!(signals.domains, vec!["example.com".to_string()]);
         assert!(signals.has_command("bash"));
         assert!(signals.has_command("curl"));
-        assert_eq!(signals.sensitive_paths, vec!["/root/.ssh/config".to_string()]);
+        assert_eq!(
+            signals.sensitive_paths,
+            vec!["/root/.ssh/config".to_string()]
+        );
         assert_eq!(signals.shell_profiles, vec!["/root/.bashrc".to_string()]);
     }
 
