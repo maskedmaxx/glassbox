@@ -2,6 +2,8 @@ mod audit;
 mod cli;
 mod docker;
 mod fsdiff;
+mod network;
+mod process;
 mod report;
 mod rules;
 mod signals;
