@@ -78,8 +78,49 @@ impl RuleEngine {
                 title: "Network destination signal".to_string(),
                 detail: format!(
                     "Detected URL domains: {}.",
-                    signals.domains.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+                    signals
+                        .domains
+                        .iter()
+                        .take(5)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
+            });
+        }
+
+        if run.network_summary.count() > 0 {
+            findings.push(Finding {
+                severity: Severity::Low,
+                title: "Open socket activity".to_string(),
+                detail: format!(
+                    "Observed {} network socket sample(s) during execution.",
+                    run.network_summary.count()
+                ),
+            });
+        }
+
+        if run.process_summary.saw_command("chmod") {
+            findings.push(Finding {
+                severity: Severity::Medium,
+                title: "Permission change process".to_string(),
+                detail: "Observed chmod while the command was running.".to_string(),
+            });
+        }
+
+        if run.process_summary.saw_command("chown") {
+            findings.push(Finding {
+                severity: Severity::Medium,
+                title: "Ownership change process".to_string(),
+                detail: "Observed chown while the command was running.".to_string(),
+            });
+        }
+
+        if run.process_summary.saw_command("ssh") {
+            findings.push(Finding {
+                severity: Severity::High,
+                title: "SSH process".to_string(),
+                detail: "Observed ssh while the command was running.".to_string(),
             });
         }
 
