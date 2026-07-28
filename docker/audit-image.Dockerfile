@@ -13,6 +13,7 @@ RUN apt-get update \
         netbase \
         procps \
         python3 \
+        strace \
         tar \
         unzip \
         wget \
