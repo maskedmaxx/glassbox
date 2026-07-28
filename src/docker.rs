@@ -1,6 +1,7 @@
 use crate::fsdiff::FilesystemDiff;
 use crate::network::NetworkSummary;
 use crate::process::ProcessSummary;
+use crate::trace::TraceSummary;
 use anyhow::{Context, Result};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -19,6 +20,7 @@ pub struct SandboxRun {
     pub filesystem_diff: FilesystemDiff,
     pub process_summary: ProcessSummary,
     pub network_summary: NetworkSummary,
+    pub trace_summary: TraceSummary,
 }
 
 impl DockerRunner {
@@ -58,7 +60,7 @@ find / -xdev -printf '%p\t%s\t%T@\t%m\t%y\n' 2>/dev/null | sort > /glassbox-out/
 capture_processes
 capture_network
 
-bash -lc "$GLASSBOX_COMMAND" &
+strace -ff -s 256 -o /glassbox-out/strace bash -lc "$GLASSBOX_COMMAND" &
 glassbox_pid=$!
 
 while kill -0 "$glassbox_pid" 2>/dev/null; do
@@ -103,6 +105,8 @@ exit "$glassbox_status"
             .context("failed to build process summary from sandbox log")?;
         let network_summary = NetworkSummary::from_log_file(&network_log)
             .context("failed to build network summary from sandbox log")?;
+        let trace_summary = TraceSummary::from_log_dir(audit_dir.path(), "strace")
+            .context("failed to build strace summary from sandbox trace logs")?;
 
         Ok(SandboxRun {
             exit_code: output.status.code(),
@@ -112,6 +116,7 @@ exit "$glassbox_status"
             filesystem_diff,
             process_summary,
             network_summary,
+            trace_summary,
         })
     }
 }
