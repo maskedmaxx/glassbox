@@ -7,6 +7,7 @@ mod process;
 mod report;
 mod rules;
 mod signals;
+mod trace;
 
 use anyhow::Result;
 use cli::{Cli, Command};
