@@ -139,6 +139,7 @@ fn should_ignore_path(path: &str) -> bool {
         || path.starts_with("/dev/")
         || path.starts_with("/run/")
         || path.starts_with("/tmp/")
+        || path == "/glassbox-out"
         || path.starts_with("/glassbox-out/")
 }
 
