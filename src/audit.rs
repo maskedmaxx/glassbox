@@ -2,7 +2,7 @@ use crate::cli::AuditArgs;
 use crate::docker::{DockerRunner, SandboxRun};
 use crate::report::{AuditReport, ReportWriter};
 use crate::rules::RuleEngine;
-use crate::signals::BehaviorSignals;
+use crate::signals::BehaviourSignals;
 use anyhow::{Context, Result};
 use owo_colors::OwoColorize;
 use std::fs;
@@ -34,7 +34,7 @@ pub fn run(args: AuditArgs) -> Result<()> {
         .run(&args.command)
         .context("sandbox execution failed")?;
 
-    let signals = BehaviorSignals::from_run(&args.command, &sandbox_run);
+    let signals = BehaviourSignals::from_run(&args.command, &sandbox_run);
     let findings = RuleEngine.evaluate(&sandbox_run, &signals);
     let report = AuditReport::from_run(args.command, args.image, sandbox_run, signals, findings);
     let written = ReportWriter::new(args.out).write_all(&report)?;
