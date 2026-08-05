@@ -1,5 +1,5 @@
 use crate::docker::SandboxRun;
-use crate::signals::BehaviorSignals;
+use crate::signals::BehaviourSignals;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -20,7 +20,7 @@ pub struct Finding {
 pub struct RuleEngine;
 
 impl RuleEngine {
-    pub fn evaluate(&self, run: &SandboxRun, signals: &BehaviorSignals) -> Vec<Finding> {
+    pub fn evaluate(&self, run: &SandboxRun, signals: &BehaviourSignals) -> Vec<Finding> {
         let combined = format!("{}\n{}", run.stdout, run.stderr);
         let mut findings = Vec::new();
 
@@ -121,6 +121,39 @@ impl RuleEngine {
                 severity: Severity::High,
                 title: "SSH process".to_string(),
                 detail: "Observed ssh while the command was running.".to_string(),
+            });
+        }
+
+        if !run.trace_summary.executed.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Low,
+                title: "Executed program trace".to_string(),
+                detail: format!(
+                    "strace observed {} executed program(s).",
+                    run.trace_summary.executed.len()
+                ),
+            });
+        }
+
+        if !run.trace_summary.network_connects.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Medium,
+                title: "Network connect syscall".to_string(),
+                detail: format!(
+                    "strace observed {} network connect syscall(s).",
+                    run.trace_summary.network_connects.len()
+                ),
+            });
+        }
+
+        if run.trace_summary.saw_path_containing("/.ssh/")
+            || run.trace_summary.saw_path_containing(".npmrc")
+            || run.trace_summary.saw_path_containing(".env")
+        {
+            findings.push(Finding {
+                severity: Severity::High,
+                title: "Sensitive file access syscall".to_string(),
+                detail: "strace observed access to a sensitive-looking path.".to_string(),
             });
         }
 

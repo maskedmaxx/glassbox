@@ -3,7 +3,8 @@ use crate::fsdiff::FilesystemDiff;
 use crate::network::NetworkSummary;
 use crate::process::ProcessSummary;
 use crate::rules::{Finding, Severity};
-use crate::signals::BehaviorSignals;
+use crate::signals::BehaviourSignals;
+use crate::trace::TraceSummary;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fs;
@@ -17,10 +18,11 @@ pub struct AuditReport {
     pub duration_ms: u128,
     pub stdout_preview: String,
     pub stderr_preview: String,
-    pub signals: BehaviorSignals,
+    pub signals: BehaviourSignals,
     pub filesystem_diff: FilesystemDiff,
     pub process_summary: ProcessSummary,
     pub network_summary: NetworkSummary,
+    pub trace_summary: TraceSummary,
     pub findings: Vec<Finding>,
 }
 
@@ -39,7 +41,7 @@ impl AuditReport {
         command: String,
         image: String,
         run: SandboxRun,
-        signals: BehaviorSignals,
+        signals: BehaviourSignals,
         findings: Vec<Finding>,
     ) -> Self {
         Self {
@@ -53,6 +55,7 @@ impl AuditReport {
             filesystem_diff: run.filesystem_diff,
             process_summary: run.process_summary,
             network_summary: run.network_summary,
+            trace_summary: run.trace_summary,
             findings,
         }
     }
@@ -99,6 +102,10 @@ impl AuditReport {
             "**Network connections observed:** `{}`\n\n",
             self.network_summary.count()
         ));
+        body.push_str(&format!(
+            "**Syscall trace events:** `{}`\n\n",
+            self.trace_summary.count()
+        ));
 
         body.push_str("## Findings\n\n");
         if self.findings.is_empty() {
@@ -136,6 +143,9 @@ impl AuditReport {
         );
         write_network_list(&mut body, &self.network_summary);
 
+        body.push_str("## Syscall Trace\n\n");
+        write_trace_summary(&mut body, &self.trace_summary);
+
         body.push_str("## Filesystem Changes\n\n");
         write_file_list(&mut body, "Created", &self.filesystem_diff.created);
         write_modified_file_list(&mut body, "Modified", &self.filesystem_diff.modified);
@@ -150,6 +160,90 @@ impl AuditReport {
         body.push_str("\n```\n");
 
         body
+    }
+}
+
+fn write_trace_summary(body: &mut String, summary: &TraceSummary) {
+    const MAX_ITEMS: usize = 40;
+
+    body.push_str("### Executed Programs\n\n");
+    if summary.executed.is_empty() {
+        body.push_str("None detected.\n\n");
+    } else {
+        for program in summary.executed.iter().take(MAX_ITEMS) {
+            body.push_str(&format!(
+                "- `{}` args=`{}`\n",
+                program.path,
+                program.args.join(" ")
+            ));
+        }
+        if summary.executed.len() > MAX_ITEMS {
+            body.push_str(&format!(
+                "- ...{} more\n",
+                summary.executed.len() - MAX_ITEMS
+            ));
+        }
+        body.push('\n');
+    }
+
+    body.push_str("### Opened Files\n\n");
+    if summary.opened_files.is_empty() {
+        body.push_str("None detected.\n\n");
+    } else {
+        for access in summary.opened_files.iter().take(MAX_ITEMS) {
+            let flags = access.flags.as_deref().unwrap_or("unknown flags");
+            body.push_str(&format!(
+                "- `{}` via `{}` ({})\n",
+                access.path, access.syscall, flags
+            ));
+        }
+        if summary.opened_files.len() > MAX_ITEMS {
+            body.push_str(&format!(
+                "- ...{} more\n",
+                summary.opened_files.len() - MAX_ITEMS
+            ));
+        }
+        body.push('\n');
+    }
+
+    body.push_str("### File Mutations\n\n");
+    if summary.file_mutations.is_empty() {
+        body.push_str("None detected.\n\n");
+    } else {
+        for mutation in summary.file_mutations.iter().take(MAX_ITEMS) {
+            let detail = mutation.detail.as_deref().unwrap_or("unknown result");
+            body.push_str(&format!(
+                "- `{}` via `{}` result=`{}`\n",
+                mutation.path, mutation.syscall, detail
+            ));
+        }
+        if summary.file_mutations.len() > MAX_ITEMS {
+            body.push_str(&format!(
+                "- ...{} more\n",
+                summary.file_mutations.len() - MAX_ITEMS
+            ));
+        }
+        body.push('\n');
+    }
+
+    body.push_str("### Network Connects\n\n");
+    if summary.network_connects.is_empty() {
+        body.push_str("None detected.\n\n");
+    } else {
+        for connect in summary.network_connects.iter().take(MAX_ITEMS) {
+            let port = connect
+                .port
+                .map(|port| port.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            body.push_str(&format!("- `{}` port `{}`\n", connect.address, port));
+        }
+        if summary.network_connects.len() > MAX_ITEMS {
+            body.push_str(&format!(
+                "- ...{} more\n",
+                summary.network_connects.len() - MAX_ITEMS
+            ));
+        }
+        body.push('\n');
     }
 }
 
