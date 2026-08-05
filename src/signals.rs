@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Default, Serialize)]
-pub struct BehaviorSignals {
+pub struct BehaviourSignals {
     pub urls: Vec<String>,
     pub domains: Vec<String>,
     pub command_tokens: Vec<String>,
@@ -12,7 +12,7 @@ pub struct BehaviorSignals {
     pub shell_profiles: Vec<String>,
 }
 
-impl BehaviorSignals {
+impl BehaviourSignals {
     pub fn from_run(command: &str, run: &SandboxRun) -> Self {
         let text = format!("{command}\n{}\n{}", run.stdout, run.stderr);
         let urls = extract_urls(&text);
@@ -187,11 +187,12 @@ fn unique(values: impl IntoIterator<Item = String>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::BehaviorSignals;
+    use super::BehaviourSignals;
     use crate::docker::SandboxRun;
     use crate::fsdiff::{FileEntry, FilesystemDiff, ModifiedFile};
     use crate::network::NetworkSummary;
     use crate::process::ProcessSummary;
+    use crate::trace::TraceSummary;
     use std::time::Duration;
 
     #[test]
@@ -203,6 +204,7 @@ mod tests {
             duration: Duration::from_millis(10),
             process_summary: ProcessSummary::default(),
             network_summary: NetworkSummary::default(),
+            trace_summary: TraceSummary::default(),
             filesystem_diff: FilesystemDiff {
                 created: vec![entry("/root/.ssh/config")],
                 modified: vec![ModifiedFile {
@@ -216,7 +218,7 @@ mod tests {
             },
         };
 
-        let signals = BehaviorSignals::from_run("bash install.sh", &run);
+        let signals = BehaviourSignals::from_run("bash install.sh", &run);
 
         assert_eq!(
             signals.urls,
