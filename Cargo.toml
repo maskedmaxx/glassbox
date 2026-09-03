@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Audit suspicious install commands in disposable sandboxes"
 license = "MIT"
-repository = "https://github.com/yourname/glassbox"
+repository = "https://github.com/maskedmaxx/glassbox"
 
 [dependencies]
 anyhow = "1.0"
