@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Audit suspicious install commands in disposable sandboxes"
 license = "MIT"
-repository = "https://github.com/yourname/glassbox"
+repository = "https://github.com/maskedmaxx/glassbox"
 
 [dependencies]
 anyhow = "1.0"
@@ -13,5 +13,7 @@ owo-colors = "4.1"
 regex = "1.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
+sha2 = "0.10"
 tempfile = "3.10"
 time = { version = "0.3", features = ["formatting", "macros"] }
